@@ -15,12 +15,12 @@ from app.core.ffmpeg_path import resolve_ffmpeg_executable
 
 
 class TaskStatus(str, Enum):
-    PENDING = "等待中"
-    RUNNING = "压缩中"
-    COMPLETED = "完成"
-    FAILED = "失败"
-    SKIPPED = "已跳过"
-    CANCELLED = "已取消"
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -105,7 +105,7 @@ class CompressionWorker(QObject):
             if self._stop_requested:
                 if task.status == TaskStatus.PENDING:
                     task.status = TaskStatus.CANCELLED
-                    task.message = "用户已停止"
+                    task.message = "Stopped by user"
                     self.task_updated.emit(index)
                 continue
 
@@ -120,7 +120,7 @@ class CompressionWorker(QObject):
 
             task.status = TaskStatus.RUNNING
             task.progress = 0
-            task.message = "正在压缩..."
+            task.message = "Compressing..."
             self.task_updated.emit(index)
             self.batch_progress.emit(completed, total)
 
@@ -130,7 +130,7 @@ class CompressionWorker(QObject):
                 task.progress = 100
                 if task.output_path.is_file():
                     task.compressed_size = task.output_path.stat().st_size
-                task.message = "压缩完成"
+                task.message = "Completed"
                 completed += 1
             else:
                 task.status = TaskStatus.FAILED
@@ -174,7 +174,7 @@ class CompressionWorker(QObject):
                 errors="replace",
             )
         except OSError as exc:
-            return False, f"无法启动 FFmpeg：{exc}"
+            return False, f"Unable to start FFmpeg: {exc}"
 
         assert process.stderr is not None
         stderr_lines: list[str] = []
@@ -186,7 +186,7 @@ class CompressionWorker(QObject):
                     process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                return False, "用户已停止"
+                return False, "Stopped by user"
 
             self._pause_event.wait()
             stderr_lines.append(line.rstrip())
@@ -212,9 +212,9 @@ class CompressionWorker(QObject):
         return_code = process.wait()
         if return_code != 0:
             tail = "\n".join(stderr_lines[-8:]).strip()
-            return False, tail or f"FFmpeg 退出码 {return_code}"
+            return False, tail or f"FFmpeg exit code {return_code}"
 
-        return True, "压缩完成"
+        return True, "Completed"
 
 
 class CompressionController(QObject):
