@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QLocale, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -53,6 +54,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("MP3 压缩工具")
         self.resize(1080, 720)
+        self._is_chinese = QLocale.system().name().lower().startswith("zh")
+        self._selected_source_file: Path | None = None
 
         self._controller = CompressionController()
         self._controller.task_updated.connect(self._on_task_updated)
@@ -82,10 +85,13 @@ class MainWindow(QMainWindow):
         self.source_edit = QLineEdit()
         self.source_btn = QPushButton("选择源文件夹")
         self.source_btn.clicked.connect(self._choose_source)
+        self.source_file_btn = QPushButton("选择单个 MP3 文件")
+        self.source_file_btn.clicked.connect(self._choose_source_file)
 
         source_row = QHBoxLayout()
         source_row.addWidget(self.source_edit)
         source_row.addWidget(self.source_btn)
+        source_row.addWidget(self.source_file_btn)
 
         self.output_edit = QLineEdit()
         self.output_btn = QPushButton("选择目标文件夹")
@@ -172,6 +178,9 @@ class MainWindow(QMainWindow):
 
         self.retry_btn = QPushButton("重试失败项")
         self.retry_btn.clicked.connect(self._retry_failed)
+        self.clear_btn = QPushButton("清空任务")
+        self.clear_btn.clicked.connect(self._clear_tasks)
+        self.clear_btn.setEnabled(False)
 
         self.overall_label = QLabel("总体进度：0 / 0")
         self.overall_bar = QProgressBar()
@@ -184,6 +193,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.resume_btn)
         layout.addWidget(self.stop_btn)
         layout.addWidget(self.retry_btn)
+        layout.addWidget(self.clear_btn)
         layout.addStretch()
         layout.addWidget(self.overall_label)
         layout.addWidget(self.overall_bar, stretch=1)
@@ -249,12 +259,25 @@ class MainWindow(QMainWindow):
         self.log_view.append(message)
 
     def _choose_source(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "选择源文件夹")
+        title = self._tr("选择源文件夹", "Select Source Folder")
+        path = QFileDialog.getExistingDirectory(self, title)
         if path:
+            self._selected_source_file = None
             self.source_edit.setText(path)
 
+    def _choose_source_file(self) -> None:
+        title = self._tr("选择单个 MP3 文件", "Select Single MP3 File")
+        file_filter = self._tr("MP3 文件 (*.mp3)", "MP3 Files (*.mp3)")
+        path, _ = QFileDialog.getOpenFileName(self, title, "", file_filter)
+        if path:
+            selected = Path(path)
+            self._selected_source_file = selected
+            self.source_edit.setText(str(selected.parent))
+            self._append_log(f"已选择单文件：{selected.name}")
+
     def _choose_output(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "选择目标文件夹")
+        title = self._tr("选择目标文件夹", "Select Target Folder")
+        path = QFileDialog.getExistingDirectory(self, title)
         if path:
             self.output_edit.setText(path)
 
@@ -325,7 +348,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "路径无效", message)
             return
 
-        files = scan_mp3_files(source)
+        if self._selected_source_file and self._selected_source_file.is_file():
+            files = [self._selected_source_file]
+        else:
+            files = scan_mp3_files(source)
         if not files:
             QMessageBox.information(self, "提示", "源文件夹中没有找到 MP3 文件。")
             return
@@ -338,6 +364,7 @@ class MainWindow(QMainWindow):
         self._populate_task_table()
         self._update_summary()
         self._append_log(f"已扫描 {len(tasks)} 个 MP3 文件。")
+        self.clear_btn.setEnabled(True)
 
     def _resolve_output_dir(self, source: str, output: str) -> str:
         source_path = Path(source).resolve()
@@ -389,6 +416,7 @@ class MainWindow(QMainWindow):
         self.resume_btn.setEnabled(False)
         self.stop_btn.setEnabled(running)
         self.retry_btn.setEnabled(not running)
+        self.clear_btn.setEnabled((not running) and bool(self._controller.tasks))
         self.profile_combo.setEnabled(not running)
 
     def _start_compression(self) -> None:
@@ -452,6 +480,17 @@ class MainWindow(QMainWindow):
         self._set_controls_running(True)
         self._controller.start(self._current_settings(), retry_failed_only=True)
 
+    def _clear_tasks(self) -> None:
+        if self._controller.is_running:
+            return
+        self._controller.set_tasks([])
+        self.task_table.setRowCount(0)
+        self.overall_label.setText("总体进度：0 / 0")
+        self.overall_bar.setValue(0)
+        self.summary_label.setText("尚未开始压缩")
+        self.clear_btn.setEnabled(False)
+        self._append_log("任务已清空（未删除任何文件夹或文件）。")
+
     def _on_task_updated(self, index: int) -> None:
         if 0 <= index < len(self._controller.tasks):
             self._set_row(index, self._controller.tasks[index])
@@ -463,9 +502,17 @@ class MainWindow(QMainWindow):
         self._update_summary()
 
     def _on_batch_finished(self) -> None:
+        all_completed = bool(self._controller.tasks) and all(
+            task.status == TaskStatus.COMPLETED for task in self._controller.tasks
+        )
         self._set_controls_running(False)
         self._update_summary()
         self._append_log("批处理结束。")
+        if all_completed:
+            QApplication.beep()
+
+    def _tr(self, zh_text: str, en_text: str) -> str:
+        return zh_text if self._is_chinese else en_text
 
     def _update_summary(self) -> None:
         tasks = self._controller.tasks
