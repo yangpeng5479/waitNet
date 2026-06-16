@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bundled ffmpeg binaries (downloaded locally / in CI)
+resources/ffmpeg/macos/ffmpeg
+resources/ffmpeg/windows/ffmpeg.exe
+resources/ffmpeg/linux/ffmpeg
+
+# Test artifacts
+test_input/
+test_output/
+output_files/
+*.mp3
+
+# Build output
+dist/
+build/

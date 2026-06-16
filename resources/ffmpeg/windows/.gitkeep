@@ -1,0 +1,2 @@
+# Place downloaded Windows ffmpeg.exe here before packaging.
+# Run: python scripts/download_ffmpeg.py --platform windows

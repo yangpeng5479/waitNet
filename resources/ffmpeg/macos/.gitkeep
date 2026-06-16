@@ -1,0 +1,2 @@
+# Place downloaded macOS ffmpeg binary here before packaging.
+# Run: python scripts/download_ffmpeg.py --platform macos
