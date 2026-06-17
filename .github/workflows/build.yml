@@ -33,11 +33,16 @@ jobs:
       - name: Build app bundle
         run: pyinstaller mp3-compressor.spec --noconfirm
 
+      - name: Package macOS app as zip
+        run: |
+          ditto -c -k --keepParent dist/MP3Compressor.app dist/MP3Compressor-macOS.zip
+          ls -la dist/MP3Compressor.app dist/MP3Compressor-macOS.zip
+
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: MP3Compressor-macOS
-          path: dist/MP3Compressor.app
+          path: dist/MP3Compressor-macOS.zip
 
   build-windows:
     runs-on: windows-latest
@@ -59,8 +64,14 @@ jobs:
       - name: Build executable
         run: pyinstaller mp3-compressor.spec --noconfirm
 
+      - name: Package Windows build as zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/MP3Compressor -DestinationPath dist/MP3Compressor-Windows.zip -Force
+          Get-ChildItem dist/MP3Compressor-Windows.zip
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: MP3Compressor-Windows
-          path: dist/MP3Compressor
+          path: dist/MP3Compressor-Windows.zip
